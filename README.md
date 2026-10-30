@@ -14,3 +14,7 @@ Temporary README for Noyucord, a Discord client mod based on Equicord and Vencor
 If losing your account would be unacceptable, do not use client mods.
 
 Noyucord is not affiliated with or endorsed by Discord Inc. Discord is a trademark of Discord Inc.
+
+## What sets us apart?
+
+Noyucord includes a built in UserPlugin library, letting you  install plugins without forking the project or downloading extra things for this. BetterDiscord plugins also work natively, giving you even more ways to customize your experience.
