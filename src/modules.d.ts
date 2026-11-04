@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ declare module "~plugins" {
     export const PluginMeta: Record<string, {
         folderName: string;
         userPlugin: boolean;
+        origin: import("./utils/pluginOrigins").PluginOrigin;
     }>;
     export const ExcludedPlugins: Record<string, PluginTarget>;
 }
@@ -47,4 +48,14 @@ declare module "*.css";
 declare module "*.css?managed" {
     const name: string;
     export default name;
+}
+
+declare module "~userplugin-modules" {
+    const modules: Record<string, Record<string, unknown>>;
+    export default modules;
+}
+
+declare module "~userplugin-authors" {
+    const authors: import("@shared/userPlugins").UserPluginAuthorRegistries;
+    export default authors;
 }

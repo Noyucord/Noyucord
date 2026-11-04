@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,7 +24,7 @@ import { RendererSettings } from "./settings";
 import { patchTrayMenu } from "./trayMenu";
 import { IS_VANILLA } from "./utils/constants";
 
-console.log("[Equicord] Starting up...");
+console.log("[Noyucord] Starting up...");
 
 // Our injector file at app/index.js
 const injectorPath = require.main!.filename;
@@ -52,7 +52,7 @@ if (!IS_VANILLA) {
         try {
             require("./hostUpdateHook").installHostUpdateHook();
         } catch (err) {
-            console.error("[Equicord] Failed to install host update hook", err);
+            console.error("[Noyucord] Failed to install host update hook", err);
         }
     }
 
@@ -152,8 +152,8 @@ if (!IS_VANILLA) {
     process.env.DATA_DIR = join(app.getPath("userData"), "..", "Equicord");
     if (settings.plugins?.NoTrack?.disableStackDumping !== false) process.env.ELECTRON_ENABLE_STACK_DUMPING = "true";
 } else {
-    console.log("[Equicord] Running in vanilla mode. Not loading Equicord");
+    console.log("[Noyucord] Running in vanilla mode. Not loading Noyucord");
 }
 
-console.log("[Equicord] Loading original Discord app.asar");
+console.log("[Noyucord] Loading original Discord app.asar");
 require(require.main!.filename);

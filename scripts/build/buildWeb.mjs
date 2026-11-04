@@ -1,6 +1,6 @@
 #!/usr/bin/node
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -86,7 +86,7 @@ const buildConfigs = [
     {
         ...commonOptions,
         outfile: "dist/browser/browser.js",
-        footer: { js: "//# sourceURL=file:///VencordWeb" }
+        footer: { js: "globalThis.Noyucord = globalThis.Vencord = Vencord; globalThis.NoyucordNative = globalThis.VencordNative;\n//# sourceURL=file:///VencordWeb" }
     },
     {
         ...commonOptions,
@@ -95,7 +95,7 @@ const buildConfigs = [
             ...commonOptions.define,
             IS_EXTENSION: "true"
         },
-        footer: { js: "//# sourceURL=file:///VencordWeb" }
+        footer: { js: "globalThis.Noyucord = globalThis.Vencord = Vencord; globalThis.NoyucordNative = globalThis.VencordNative;\n//# sourceURL=file:///VencordWeb" }
     },
     {
         ...commonOptions,
@@ -111,7 +111,7 @@ const buildConfigs = [
         },
         footer: {
             // UserScripts get wrapped in an iife, so define Vencord prop on window that returns our local
-            js: "Object.defineProperty(unsafeWindow,'Vencord',{get:()=>Vencord});"
+            js: "Object.defineProperty(unsafeWindow,'Vencord',{get:()=>Vencord}); Object.defineProperty(unsafeWindow,'Noyucord',{get:()=>Vencord}); unsafeWindow.NoyucordNative = unsafeWindow.VencordNative;"
         }
     }
 ];

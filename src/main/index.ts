@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -101,8 +101,8 @@ if (!IS_VANILLA && !IS_EXTENSION) {
         try {
             if (RendererSettings.store.enableReactDevtools)
                 installExt("fmkadmapgofadopljbjfkapdkoienihi")
-                    .then(() => console.info("[Equicord] Installed React Developer Tools"))
-                    .catch(err => console.error("[Equicord] Failed to install React Developer Tools", err));
+                    .then(() => console.info("[Noyucord] Installed React Developer Tools"))
+                    .catch(err => console.error("[Noyucord] Failed to install React Developer Tools", err));
         } catch { }
 
         initCsp();

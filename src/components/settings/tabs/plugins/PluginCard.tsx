@@ -12,7 +12,7 @@ import { AddonCard } from "@components/settings/AddonCard";
 import { classNameFactory } from "@utils/css";
 import { Logger } from "@utils/Logger";
 import { Plugin } from "@utils/types";
-import { React, showToast } from "@webpack/common";
+import { React, showToast, useState } from "@webpack/common";
 
 import { PluginMeta } from "~plugins";
 
@@ -32,15 +32,36 @@ interface PluginCardProps extends React.HTMLProps<HTMLDivElement> {
 export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, onMouseLeave, isNew }: PluginCardProps) {
     const settings = Settings.plugins[plugin.name];
     const pluginMeta = PluginMeta[plugin.name];
-    const isEquicordPlugin = pluginMeta.folderName.startsWith("src/equicordplugins/") ?? false;
-    const isVencordPlugin = pluginMeta.folderName.startsWith("src/plugins/") ?? false;
+    const isEquicordPlugin = pluginMeta.origin === "equicord";
+    const isVencordPlugin = pluginMeta.origin === "vencord";
     const isUserPlugin = pluginMeta?.userPlugin ?? false;
     const isModifiedPlugin = plugin.isModified ?? false;
 
+    const [saving, setSaving] = useState(false);
     const isEnabled = () => isPluginEnabled(plugin.name);
 
-    function toggleEnabled() {
+    async function toggleEnabled() {
         const wasEnabled = isEnabled();
+
+        if (!IS_WEB && pluginMeta.folderName.startsWith("userplugins/")) {
+            setSaving(true);
+            try {
+                const id = pluginMeta.folderName.slice("userplugins/".length);
+                const result = await VencordNative.userPlugins.setEnabled(id, !wasEnabled);
+                if (!result.ok) {
+                    showToast({ text: result.error, variant: "critical", position: "bottom" });
+                    return;
+                }
+                settings.enabled = !wasEnabled;
+                onRestartNeeded(plugin.name, "enabled");
+            } catch (error) {
+                logger.error("Failed to change user plugin state", error);
+                showToast({ text: "Could not change the plugin state.", variant: "critical", position: "bottom" });
+            } finally {
+                setSaving(false);
+            }
+            return;
+        }
 
         // If we're enabling a plugin, make sure all deps are enabled recursively.
         if (!wasEnabled) {
@@ -89,12 +110,6 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
 
     const pluginInfo = [
         {
-            condition: isModifiedPlugin,
-            src: "https://equicord.org/assets/icons/equicord/modified.png",
-            alt: "Modified",
-            title: "Modified Vencord Plugin"
-        },
-        {
             condition: isEquicordPlugin,
             src: "https://equicord.org/assets/favicon.png",
             alt: "Equicord",
@@ -117,14 +132,19 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
     const pluginDetails = pluginInfo.find(p => p.condition);
 
     const sourceBadge = pluginDetails ? (
-        <img
-            src={pluginDetails.src}
-            alt={pluginDetails.alt}
-            className={cl("source")}
-        />
+        <>
+            <img src={pluginDetails.src} alt={pluginDetails.alt} className={cl("source")} />
+            {isModifiedPlugin && (
+                <img
+                    src="https://equicord.org/assets/icons/equicord/modified.png"
+                    alt="Modified"
+                    className={cl("source")}
+                />
+            )}
+        </>
     ) : null;
 
-    const tooltip = pluginDetails?.title || "Unknown Plugin";
+    const tooltip = (pluginDetails?.title || (pluginMeta.origin === "noyucord" ? "Noyucord plugin" : "Unknown plugin")) + (isModifiedPlugin ? " (modified)" : "");
 
     return (
         <AddonCard
@@ -135,7 +155,7 @@ export function PluginCard({ plugin, disabled, onRestartNeeded, onMouseEnter, on
             isNew={isNew}
             enabled={isEnabled()}
             setEnabled={toggleEnabled}
-            disabled={disabled}
+            disabled={disabled || saving}
             onMouseEnter={onMouseEnter}
             onMouseLeave={onMouseLeave}
             infoButton={

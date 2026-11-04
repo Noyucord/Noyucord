@@ -10,3 +10,8 @@ declare module "~pluginNatives" {
     const pluginNatives: Record<string, Record<string, (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown>>;
     export default pluginNatives;
 }
+
+declare module "~bundled-plugin-names" {
+    const names: string[];
+    export default names;
+}

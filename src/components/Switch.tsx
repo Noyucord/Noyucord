@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -33,6 +33,7 @@ export interface SwitchProps {
     hasIcon?: boolean;
     innerRef?: Ref<HTMLInputElement>;
     "aria-describedby"?: string;
+    "aria-label"?: string;
     "aria-labelledby"?: string;
 }
 

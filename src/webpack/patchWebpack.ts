@@ -13,10 +13,12 @@ import { interpolateIfDefined } from "@utils/misc";
 import { Patch, PatchReplacement } from "@utils/types";
 import { WebpackRequire } from "@vencord/discord-types/webpack";
 
+import { runFactoryWithDeclarations } from "./declarationCapture";
 import { AnyModuleFactory, AnyWebpackRequire, MaybePatchedModuleFactory, PatchedModuleFactory } from "./types";
 import { _blacklistBadModules, _initWebpack, factoryListeners, findModuleFactory, moduleListeners, waitForSubscriptions, wreq } from "./webpack";
 
 export const patches = [] as Patch[];
+export { enableUserPluginDeclarations } from "./declarationCapture";
 
 export const SYM_ORIGINAL_MODULE_FACTORIES = Symbol("WebpackPatcher.originalModuleFactories");
 export const SYM_IS_PROXIED_FACTORY = Symbol("WebpackPatcher.isProxiedFactory");
@@ -416,7 +418,7 @@ function runFactoryWithWrap(patchedFactory: PatchedModuleFactory, thisArg: unkno
 
     let factoryReturn: unknown;
     try {
-        factoryReturn = patchedFactory.apply(thisArg, argArray);
+        factoryReturn = require === wreq ? runFactoryWithDeclarations(patchedFactory, thisArg, argArray) : patchedFactory.apply(thisArg, argArray);
     } catch (err) {
         // Just re-throw Discord errors
         if (patchedFactory === originalFactory) {
@@ -424,7 +426,7 @@ function runFactoryWithWrap(patchedFactory: PatchedModuleFactory, thisArg: unkno
         }
 
         logger.error("Error in patched module factory:\n", err);
-        return originalFactory.apply(thisArg, argArray);
+        return require === wreq ? runFactoryWithDeclarations(originalFactory, thisArg, argArray) : originalFactory.apply(thisArg, argArray);
     }
 
     exports = module.exports;

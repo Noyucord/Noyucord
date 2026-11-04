@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -16,13 +16,28 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { showToast } from "@webpack/common";
+
+import { Logger } from "./Logger";
+
 export function relaunch() {
-    if (IS_DISCORD_DESKTOP)
-        window.DiscordNative.app.relaunch();
-    else if (IS_VESKTOP || IS_EQUIBOP)
-        window.VesktopNative.app.relaunch();
-    else
-        location.reload();
+    const restart = () => {
+        if (IS_DISCORD_DESKTOP)
+            window.DiscordNative.app.relaunch();
+        else if (IS_VESKTOP || IS_EQUIBOP)
+            window.VesktopNative.app.relaunch();
+        else
+            location.reload();
+    };
+    if (IS_WEB) return restart();
+    const failed = (error: unknown) => {
+        new Logger("UserPlugins").error("Could not save plugin settings before restarting", error);
+        showToast({ text: "Plugin settings could not be saved. Check User plugins before restarting.", variant: "critical" });
+    };
+    void VencordNative.userPlugins.flushBetterDiscordData().then(result => {
+        if (!result.ok) return failed(result.error);
+        restart();
+    }, failed);
 }
 
 export function showItemInFolder(path: string) {

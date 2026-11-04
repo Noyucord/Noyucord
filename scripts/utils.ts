@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -36,6 +36,7 @@ export interface Command {
 }
 
 export interface PluginData {
+    origin: "vencord" | "equicord" | "noyucord" | "user";
     name: string;
     description: string;
     tags: string[];
@@ -55,6 +56,7 @@ export interface PluginData {
 
 export const devs = {} as Record<string, Dev>;
 export const equicordDevs = {} as Record<string, Dev>;
+export const noyucordDevs = {} as Record<string, Dev>;
 
 export function getName(node: NamedDeclaration) {
     return node.name && isIdentifier(node.name) ? node.name.text : undefined;
@@ -132,6 +134,37 @@ export function parseEquicordDevs() {
     throw new Error("Could not find EquicordDevs constant");
 }
 
+export function parseNoyucordDevs() {
+    const file = createSourceFile("constants.ts", readFileSync("src/utils/constants.ts", "utf8"), ScriptTarget.Latest);
+
+    for (const child of file.getChildAt(0).getChildren()) {
+        if (!isVariableStatement(child)) continue;
+
+        const devsDeclaration = child.declarationList.declarations.find(d => hasName(d, "NoyucordDevs"));
+        if (!devsDeclaration?.initializer || !isCallExpression(devsDeclaration.initializer)) continue;
+
+        const value = devsDeclaration.initializer.arguments[0];
+
+        if (!isSatisfiesExpression(value) || !isObjectLiteralExpression(value.expression)) throw new Error("Failed to parse NoyucordDevs: not an object literal");
+
+        for (const prop of value.expression.properties) {
+            const name = (prop.name as Identifier).text;
+            const value = isPropertyAssignment(prop) ? prop.initializer : prop;
+
+            if (!isObjectLiteralExpression(value)) throw new Error(`Failed to parse NoyucordDevs: ${name} is not an object literal`);
+
+            noyucordDevs[name] = {
+                name: (getObjectProp(value, "name") as StringLiteral).text,
+                id: (getObjectProp(value, "id") as BigIntLiteral).text.slice(0, -1)
+            };
+        }
+
+        return;
+    }
+
+    throw new Error("Could not find NoyucordDevs constant");
+}
+
 export async function parseFile(fileName: string) {
     const file = createSourceFile(fileName, await readFile(fileName, "utf8"), ScriptTarget.Latest);
 
@@ -149,6 +182,7 @@ export async function parseFile(fileName: string) {
         if (!isObjectLiteralExpression(pluginObj)) throw fail("no object literal passed to definePlugin");
 
         const data = {
+            origin: fileName.replaceAll("\\", "/").startsWith("src/plugins/vencord/") ? "vencord" : fileName.replaceAll("\\", "/").startsWith("src/plugins/equicord/") ? "equicord" : fileName.replaceAll("\\", "/").startsWith("src/noyucordplugins/") ? "noyucord" : "user",
             hasPatches: false,
             hasCommands: false,
             enabledByDefault: false,
@@ -205,7 +239,9 @@ export async function parseFile(fileName: string) {
                     if (!isArrayLiteralExpression(value)) throw fail("authors is not an array literal");
                     data.authors = value.elements.map(e => {
                         if (!isPropertyAccessExpression(e)) throw fail("authors array contains non-property access expressions");
-                        const d = devs[getName(e)!] || equicordDevs[getName(e)!];
+                        const registry = e.expression.getText(file);
+                        const authors = registry === "Devs" ? devs : registry === "EquicordDevs" ? equicordDevs : registry === "NoyucordDevs" ? noyucordDevs : undefined;
+                        const d = authors?.[getName(e)!];
                         if (!d) throw fail(`couldn't look up author ${getName(e)}`);
                         return d;
                     });
@@ -249,8 +285,8 @@ export async function parseFile(fileName: string) {
             .split(sep)
             .join(posixSep)
             .replace(/\/index\.([jt]sx?)$/, "")
-            .replace(/^src\/plugins\//, "")
-            .replace(/^src\/equicordplugins\//, "");
+            .replace(/^src\/plugins\/(?:vencord|equicord)\//, "")
+            .replace(/^src\/noyucordplugins\//, "");
 
         return [data] as const;
     }

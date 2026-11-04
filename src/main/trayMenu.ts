@@ -8,6 +8,8 @@ import { gitHash } from "@shared/vencordUserAgent";
 import { app, BaseWindow, BrowserWindow, dialog, Menu, MenuItemConstructorOptions, shell } from "electron";
 import aboutHtml from "file://about.html?minify";
 
+import gitRemote from "~git-remote";
+
 import updater from "./updater";
 import { SETTINGS_DIR, THEMES_DIR } from "./utils/constants";
 
@@ -65,6 +67,7 @@ function openAboutWindow() {
     });
 
     const aboutParams = aboutHtml
+        .replaceAll("{{REPO}}", gitRemote.split("/").map(encodeURIComponent).join("/"))
         .replaceAll("{{VERSION}}", VERSION)
         .replaceAll("{{GIT_HASH}}", gitHash); // change to gitHashShort if/when its added
     const base64Html = Buffer.from(aboutParams).toString("base64");

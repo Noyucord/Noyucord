@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -173,7 +173,7 @@ export default function PluginModal({ plugin, onRestartNeeded, onClose, transiti
     }
 
     const pluginMeta = PluginMeta[plugin.name];
-    const isEquicordPlugin = pluginMeta.folderName.startsWith("src/equicordplugins/") ?? false;
+    const isEquicordPlugin = pluginMeta.origin === "equicord";
 
     return (
         <Modal
@@ -261,10 +261,12 @@ export default function PluginModal({ plugin, onRestartNeeded, onClose, transiti
                                     isFavorite={pluginSettings.isFavorite ?? false}
                                     onClick={() => pluginSettings.isFavorite = !pluginSettings.isFavorite}
                                 />
-                                <WebsiteButton
-                                    text="Website"
-                                    href={isEquicordPlugin ? `https://equicord.org/plugins/${plugin.name}` : `https://vencord.dev/plugins/${plugin.name}`}
-                                />
+                                {(pluginMeta.origin === "equicord" || pluginMeta.origin === "vencord") && (
+                                    <WebsiteButton
+                                        text="Website"
+                                        href={isEquicordPlugin ? `https://equicord.org/plugins/${plugin.name}` : `https://vencord.dev/plugins/${plugin.name}`}
+                                    />
+                                )}
                                 <GithubButton
                                     text="Source Code"
                                     href={`https://github.com/${gitRemote}/tree/main/${pluginMeta.folderName}`}

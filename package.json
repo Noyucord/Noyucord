@@ -1,8 +1,8 @@
 {
-    "name": "equicord",
+    "name": "noyucord",
     "private": "true",
     "version": "1.15.13.0",
-    "description": "The other cutest Discord client mod",
+    "description": "A Discord client mod based on Equicord and Vencord",
     "homepage": "https://github.com/Equicord/Equicord#readme",
     "bugs": {
         "url": "https://github.com/Equicord/Equicord/issues"
@@ -27,8 +27,12 @@
         "generatePluginJson": "tsx scripts/generatePluginList.ts",
         "generateEquicordPluginJson": "tsx scripts/generatePluginList.ts --equicord",
         "generateVencordPluginJson": "tsx scripts/generatePluginList.ts --vencord",
+        "generateNoyucordPluginJson": "tsx scripts/generatePluginList.ts --noyucord",
         "generateTypes": "tspc --emitDeclarationOnly --declaration --outDir packages/vencord-types --allowJs false",
         "inject": "node scripts/runInstaller.mjs -- --install",
+        "inject:local": "node scripts/injectLocal.mjs --install",
+        "uninject:local": "node scripts/injectLocal.mjs --uninstall",
+        "test:inject-local": "node --test scripts/tests/injectLocal.test.mjs",
         "uninject": "node scripts/runInstaller.mjs -- --uninstall",
         "repair": "node scripts/runInstaller.mjs -- --repair",
         "lint": "eslint",
@@ -39,7 +43,9 @@
         "lint:patches": "node scripts/lintPatches.mjs",
         "test": "pnpm buildStandalone && pnpm testTsc && pnpm lint:fix && pnpm lint-styles && pnpm lint:intl && pnpm lint:patches && pnpm generatePluginJson",
         "testWeb": "pnpm lint:fix && pnpm buildWeb && pnpm testTsc",
-        "testTsc": "tsc --noEmit"
+        "testTsc": "tsc --noEmit",
+        "test:userplugins": "tsx --test scripts/tests/userPluginCompiler.test.ts scripts/tests/userPluginNative.test.ts scripts/tests/userPluginStore.test.ts scripts/tests/userPluginSources.test.ts scripts/tests/betterDiscordPackage.test.ts scripts/tests/betterDiscordNative.test.ts && node --test scripts/tests/userPluginRuntime.test.mjs scripts/tests/userPluginNativeRuntime.test.mjs scripts/tests/userPluginIpc.test.mjs scripts/tests/userPluginSettings.test.mjs scripts/tests/userPluginMetadata.test.mjs scripts/tests/userPluginAuthors.test.mjs scripts/tests/userPluginFacade.test.mjs scripts/tests/betterDiscordApi.test.mjs scripts/tests/betterDiscordRuntime.test.mjs scripts/tests/betterDiscordLibraries.test.mjs scripts/tests/betterDiscordHotPaths.test.mjs scripts/tests/betterDiscordProviderWebpack.test.mjs scripts/tests/webpackDeclarations.test.mjs scripts/tests/webpackDeclarationCapture.test.mjs scripts/tests/betterDiscordDeclarations.test.mjs scripts/tests/betterDiscordLegacy.test.mjs scripts/tests/notificationTiming.test.mjs",
+        "test:betterdiscord:runtime": "node --test --test-isolation=none scripts/tests/betterDiscordApi.test.mjs scripts/tests/betterDiscordRuntime.test.mjs scripts/tests/betterDiscordLibraries.test.mjs scripts/tests/betterDiscordHotPaths.test.mjs scripts/tests/betterDiscordProviderWebpack.test.mjs scripts/tests/webpackDeclarations.test.mjs scripts/tests/webpackDeclarationCapture.test.mjs scripts/tests/betterDiscordDeclarations.test.mjs scripts/tests/betterDiscordLegacy.test.mjs"
     },
     "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.10",
@@ -49,6 +55,8 @@
         "@streamparser/json": "^0.0.22",
         "@vap/core": "0.0.12",
         "@vap/shiki": "0.10.5",
+        "acorn": "8.17.0",
+        "esbuild-wasm": "0.28.1",
         "fflate": "^0.8.3",
         "gifenc": "github:mattdesl/gifenc#64842fca317b112a8590f8fef2bf3825da8f6fe3",
         "gifuct-js": "^2.1.2",

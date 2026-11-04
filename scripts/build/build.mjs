@@ -1,6 +1,6 @@
 #!/usr/bin/node
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,11 @@
 // @ts-check
 
 import { createPackage } from "@electron/asar";
-import { readdir, writeFile } from "fs/promises";
+import { copyFile, readdir, writeFile } from "fs/promises";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 
-import { BUILD_TIMESTAMP, commonOpts, exists, globPlugins, IS_DEV, IS_REPORTER, IS_COMPANION_TEST, IS_STANDALONE, IS_UPDATER_DISABLED, resolvePluginName, VERSION, commonRendererPlugins, watch, buildOrWatchAll, stringifyValues, IS_ANTI_CRASH_TEST } from "./common.mjs";
+import { acornLicense, BUILD_TIMESTAMP, bundledPluginNames, userPluginAuthors, userPluginModules, commonOpts, exists, globPlugins, IS_DEV, IS_REPORTER, IS_COMPANION_TEST, IS_STANDALONE, IS_UPDATER_DISABLED, resolvePluginName, VERSION, commonRendererPlugins, watch, buildOrWatchAll, stringifyValues, IS_ANTI_CRASH_TEST } from "./common.mjs";
 
 const defines = stringifyValues({
     IS_STANDALONE,
@@ -77,7 +77,7 @@ const globNativesPlugin = {
         });
 
         build.onLoad({ filter, namespace: "import-natives" }, async () => {
-            const pluginDirs = ["plugins", "equicordplugins", "userplugins"];
+            const pluginDirs = ["plugins/vencord", "plugins/equicord", "noyucordplugins", "userplugins"];
             let code = "";
             let natives = "\n";
             let i = 0;
@@ -130,7 +130,9 @@ const buildConfigs = ([
         plugins: [
             // @ts-ignore this is never undefined
             ...nodeCommonOpts.plugins,
-            globNativesPlugin
+            globNativesPlugin,
+            bundledPluginNames,
+            userPluginAuthors
         ],
         define: {
             ...defines,
@@ -145,11 +147,13 @@ const buildConfigs = ([
         outfile: "dist/desktop/renderer.js",
         format: "iife",
         target: ["esnext"],
-        footer: { js: "//# sourceURL=file:///VencordRenderer\n" + sourceMapFooter("renderer") },
+        footer: { js: "globalThis.Noyucord = globalThis.Vencord = Vencord; globalThis.NoyucordNative = globalThis.VencordNative;\n//# sourceURL=file:///VencordRenderer\n" + sourceMapFooter("renderer") },
         globalName: "Vencord",
         sourcemap,
         plugins: [
             globPlugins("discordDesktop"),
+            userPluginModules,
+            acornLicense,
             ...commonOpts.plugins
         ],
         define: {
@@ -182,7 +186,9 @@ const buildConfigs = ([
         sourcemap,
         plugins: [
             ...nodeCommonOpts.plugins,
-            globNativesPlugin
+            globNativesPlugin,
+            bundledPluginNames,
+            userPluginAuthors
         ],
         define: {
             ...defines,
@@ -197,7 +203,7 @@ const buildConfigs = ([
         outfile: "dist/equibop/renderer.js",
         format: "iife",
         target: ["esnext"],
-        footer: { js: "//# sourceURL=file:///VencordDesktopRenderer\n" + sourceMapFooter("renderer") },
+        footer: { js: "globalThis.Noyucord = globalThis.Vencord = Vencord; globalThis.NoyucordNative = globalThis.VencordNative;\n//# sourceURL=file:///VencordDesktopRenderer\n" + sourceMapFooter("renderer") },
         globalName: "Vencord",
         sourcemap,
         plugins: [
@@ -226,15 +232,35 @@ const buildConfigs = ([
     }
 ]);
 
+for (const target of ["desktop", "equibop"]) {
+    buildConfigs.push({
+        ...nodeCommonOpts,
+        entryPoints: ["src/main/userPlugins/compilerWorker.ts"],
+        outfile: `dist/${target}/userPluginCompiler.js`,
+        sourcemap,
+        plugins: [...commonOpts.plugins, bundledPluginNames],
+        define: {
+            ...defines,
+            IS_DISCORD_DESKTOP: String(target === "desktop"),
+            IS_VESKTOP: "false",
+            IS_EQUIBOP: String(target === "equibop")
+        }
+    });
+}
+
 await buildOrWatchAll(buildConfigs);
+
+await Promise.all(["desktop", "equibop"].map(target =>
+    copyFile("node_modules/esbuild-wasm/esbuild.wasm", `dist/${target}/esbuild.wasm`)
+));
 
 await Promise.all([
     writeFile("dist/desktop/package.json", JSON.stringify({
-        name: "equicord",
+        name: "noyucord",
         main: "patcher.js"
     })),
     writeFile("dist/equibop/package.json", JSON.stringify({
-        name: "equicord",
+        name: "noyucord",
         main: "main.js"
     }))
 ]);

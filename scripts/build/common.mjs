@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@ import { minify as minifyHtml } from "html-minifier-terser";
 import { dirname, join, relative, resolve } from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
+import ts from "typescript";
 
 import { getPluginTarget } from "../utils.mjs";
 
@@ -88,19 +89,21 @@ export async function buildOrWatchAll(buildConfigs) {
     }
 }
 
-const PluginDefinitionNameMatcher = /definePlugin\(\{\s*(["'])?name\1:\s*(["'`])(.+?)\2/;
 /**
  * @param {string} base
  * @param {import("fs").Dirent} dirent
  */
 export async function resolvePluginName(base, dirent) {
     const fullPath = join(base, dirent.name);
+    let entryPoint = fullPath;
     const content = dirent.isFile()
         ? await readFile(fullPath, "utf-8")
         : await (async () => {
             for (const file of ["index.ts", "index.tsx"]) {
                 try {
-                    return await readFile(join(fullPath, file), "utf-8");
+                    const source = await readFile(join(fullPath, file), "utf-8");
+                    entryPoint = join(fullPath, file);
+                    return source;
                 } catch {
                     continue;
                 }
@@ -108,10 +111,22 @@ export async function resolvePluginName(base, dirent) {
             throw new Error(`Invalid plugin ${fullPath}: could not resolve entry point`);
         })();
 
-    return PluginDefinitionNameMatcher.exec(content)?.[3]
-        ?? (() => {
-            throw new Error(`Invalid plugin ${fullPath}: must contain definePlugin call with simple string name property as first property`);
-        })();
+    const source = ts.createSourceFile(entryPoint, content, ts.ScriptTarget.Latest);
+    for (const statement of source.statements) {
+        if (!ts.isExportAssignment(statement) || !ts.isCallExpression(statement.expression)) continue;
+        const call = statement.expression;
+        if (!ts.isIdentifier(call.expression) || call.expression.text !== "definePlugin") continue;
+        const definition = call.arguments[0];
+        if (!definition || !ts.isObjectLiteralExpression(definition)) continue;
+        const name = definition.properties.find(property =>
+            ts.isPropertyAssignment(property)
+            && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+            && property.name.text === "name"
+        );
+        if (name && ts.isPropertyAssignment(name) && ts.isStringLiteral(name.initializer))
+            return name.initializer.text;
+    }
+    throw new Error(`Invalid plugin ${fullPath}: must export definePlugin with a string name property.`);
 }
 
 export async function exists(path) {
@@ -132,6 +147,65 @@ export const makeAllPackagesExternalPlugin = {
     }
 };
 
+export const bundledPluginRoots = ["plugins/vencord", "plugins/equicord", "noyucordplugins", "userplugins"];
+
+/** @type {import("esbuild").Plugin} */
+export const userPluginAuthors = {
+    name: "userplugin-authors",
+    setup(build) {
+        build.onResolve({ filter: /^~userplugin-authors$/ }, () => ({ path: "authors", namespace: "userplugin-authors" }));
+        build.onLoad({ filter: /.*/, namespace: "userplugin-authors" }, async () => {
+            const path = resolve("src/utils/constants.ts");
+            const source = ts.createSourceFile(path, await readFile(path, "utf-8"), ts.ScriptTarget.Latest);
+            const declarations = source.statements.flatMap(statement => ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : []);
+            const registries = Object.fromEntries(["Devs", "EquicordDevs", "NoyucordDevs"].map(name => {
+                const declaration = declarations.find(entry => ts.isIdentifier(entry.name) && entry.name.text === name);
+                const initializer = declaration?.initializer;
+                const invalid = () => new Error(`Cannot generate user plugin authors: unsupported ${name} registry format.`);
+                if (!initializer || !ts.isCallExpression(initializer) || !ts.isPropertyAccessExpression(initializer.expression)
+                    || !ts.isIdentifier(initializer.expression.expression) || initializer.expression.expression.text !== "Object"
+                    || initializer.expression.name.text !== "freeze" || initializer.arguments.length !== 1) throw invalid();
+                const value = initializer.arguments[0];
+                if (!ts.isSatisfiesExpression(value) || !ts.isObjectLiteralExpression(value.expression)) throw invalid();
+                const authors = Object.fromEntries(value.expression.properties.map(entry => {
+                    if (!ts.isPropertyAssignment(entry) || !(ts.isIdentifier(entry.name) || ts.isStringLiteral(entry.name)) || !ts.isObjectLiteralExpression(entry.initializer)) throw invalid();
+                    const properties = entry.initializer.properties;
+                    const authorName = properties.find(property => ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && property.name.text === "name");
+                    const authorId = properties.find(property => ts.isPropertyAssignment(property) && (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) && property.name.text === "id");
+                    if (!authorName || !ts.isPropertyAssignment(authorName) || !ts.isStringLiteral(authorName.initializer)
+                        || !authorId || !ts.isPropertyAssignment(authorId) || !ts.isBigIntLiteral(authorId.initializer)) throw invalid();
+                    const id = authorId.initializer.text.slice(0, -1);
+                    if (!/^\d{1,20}$/.test(id)) throw invalid();
+                    return [entry.name.text, { name: authorName.initializer.text, id }];
+                }));
+                return [name, authors];
+            }));
+            return { contents: `export default ${JSON.stringify(registries)};`, loader: "js", watchFiles: [path] };
+        });
+    }
+};
+
+export const bundledPluginNames = {
+    name: "bundled-plugin-names",
+    setup(build) {
+        build.onResolve({ filter: /^~bundled-plugin-names$/ }, () => ({ path: "names", namespace: "bundled-plugin-names" }));
+        build.onLoad({ filter: /.*/, namespace: "bundled-plugin-names" }, async () => {
+            const names = [];
+            for (const root of bundledPluginRoots) {
+                for (const dir of [root, `${root}/_api`, `${root}/_core`]) {
+                    const base = join("src", dir);
+                    if (!await exists(base)) continue;
+                    for (const file of await readdir(base, { withFileTypes: true })) {
+                        if (file.name.startsWith("_") || file.name.startsWith(".") || file.name === "index.ts") continue;
+                        names.push(await resolvePluginName(base, file));
+                    }
+                }
+            }
+            return { contents: `export default ${JSON.stringify(names.sort())};`, loader: "js" };
+        });
+    }
+};
+
 /**
  * @type {(kind: "web" | "discordDesktop" | "vesktop" | "equibop") => import("esbuild").Plugin}
  */
@@ -147,7 +221,7 @@ export const globPlugins = kind => ({
         });
 
         build.onLoad({ filter, namespace: "import-plugins" }, async () => {
-            const pluginDirs = ["plugins/_api", "plugins/_core", "plugins", "equicordplugins/_api", "equicordplugins/_core", "equicordplugins", "userplugins"];
+            const pluginDirs = ["plugins/vencord/_api", "plugins/vencord/_core", "plugins/vencord", "plugins/equicord/_api", "plugins/equicord/_core", "plugins/equicord", "noyucordplugins/_api", "noyucordplugins/_core", "noyucordplugins", "userplugins"];
             let code = "";
             let pluginsCode = "\n";
             let metaCode = "\n";
@@ -155,6 +229,7 @@ export const globPlugins = kind => ({
             let i = 0;
             for (const dir of pluginDirs) {
                 const userPlugin = dir === "userplugins";
+                const origin = userPlugin ? "user" : dir.startsWith("plugins/vencord") ? "vencord" : dir.startsWith("plugins/equicord") ? "equicord" : "noyucord";
 
                 const fullDir = `./src/${dir}`;
                 if (!await exists(fullDir)) continue;
@@ -189,7 +264,7 @@ export const globPlugins = kind => ({
                     const mod = `p${i}`;
                     code += `import ${mod} from "./${dir}/${fileName.replace(/\.tsx?$/, "")}";\n`;
                     pluginsCode += `[${mod}.name]:${mod},\n`;
-                    metaCode += `[${mod}.name]:${JSON.stringify({ folderName, userPlugin })},\n`;
+                    metaCode += `[${mod}.name]:${JSON.stringify({ folderName, userPlugin, origin })},\n`;
                     i++;
                 }
             }
@@ -362,7 +437,40 @@ export const commonOpts = {
     jsxFragment: "VencordFragment"
 };
 
+export const userPluginModules = {
+    name: "userplugin-modules",
+    setup(build) {
+        build.onResolve({ filter: /^~userplugin-modules$/ }, () => ({ path: "modules", namespace: "userplugin-modules" }));
+        build.onLoad({ filter: /.*/, namespace: "userplugin-modules" }, async () => {
+            const source = await readFile("src/shared/userPluginModules.ts", "utf-8");
+            const list = source.match(/USER_PLUGIN_HOST_MODULES\s*=\s*\[([\s\S]*?)\] as const/);
+            if (!list) throw new Error("User plugin host modules are missing.");
+            const names = [...list[1].matchAll(/"([^"\n]+)"/g)].map(match => match[1]);
+            const imports = names.map((name, index) => `import * as m${index} from ${JSON.stringify(name)};`).join("\n");
+            const entries = names.map((name, index) => `${JSON.stringify(name)}:facade(m${index})`).join(",");
+            return {
+                contents: `${imports}\nconst facade = module => Object.defineProperties({ __esModule: true }, Object.fromEntries(Object.keys(module).filter(key => key !== "__esModule").map(key => [key, { enumerable: true, get: () => module[key] }])));\nexport default {${entries}};`,
+                loader: "js",
+                resolveDir: process.cwd()
+            };
+        });
+    }
+};
+
+export const acornLicense = {
+    name: "acorn-license",
+    setup(build) {
+        build.onLoad({ filter: /[\\/]acorn[\\/]dist[\\/]acorn\.(?:m)?js$/ }, async args => {
+            const licensePath = join(dirname(args.path), "../LICENSE");
+            const [source, license] = await Promise.all([readFile(args.path, "utf-8"), readFile(licensePath, "utf-8")]);
+            return { contents: `/*! Acorn\n${license}\n*/\n${source}`, loader: "js", resolveDir: dirname(args.path), watchFiles: [args.path, licensePath] };
+        });
+    }
+};
+
 export const commonRendererPlugins = [
+    acornLicense,
+    userPluginModules,
     banImportPlugin(/^react$/, "Cannot import from react. React and hooks should be imported from @webpack/common"),
     banImportPlugin(/^electron(\/.*)?$/, "Cannot import electron in browser code. You need to use a native.ts file"),
     banImportPlugin(/^ts-pattern$/, "Cannot import from ts-pattern. match and P should be imported from @webpack/common"),

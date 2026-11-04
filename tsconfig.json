@@ -36,7 +36,7 @@
                 "./src/utils/*"
             ],
             "@plugins/*": [
-                "./src/plugins/*"
+                "./src/plugins/vencord/*"
             ],
             "@shared/*": [
                 "./src/shared/*"
@@ -59,8 +59,11 @@
             "@webpack/types": [
                 "./src/webpack/types"
             ],
+            "@noyucordplugins/*": [
+                "./src/noyucordplugins/*"
+            ],
             "@equicordplugins/*": [
-                "./src/equicordplugins/*"
+                "./src/plugins/equicord/*"
             ]
         },
         "plugins": [

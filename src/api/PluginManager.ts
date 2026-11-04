@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
 
 import { addProfileBadge, removeProfileBadge } from "@api/Badges";
 import { addChatBarButton, addChatBarButtonWrapper, removeChatBarButton, removeChatBarButtonWrapper } from "@api/ChatButtons";
-import { registerCommand, unregisterCommand } from "@api/Commands";
+import { BUILT_IN, commands as registeredCommands, registerCommand, unregisterCommand } from "@api/Commands";
 import { addContextMenuPatch, removeContextMenuPatch } from "@api/ContextMenu";
 import { addMemberListDecorator, removeMemberListDecorator } from "@api/MemberListDecorators";
 import { addMessageAccessory, removeMessageAccessory } from "@api/MessageAccessories";
@@ -28,6 +28,7 @@ import { addMessagePopoverButton, removeMessagePopoverButton } from "@api/Messag
 import { addNicknameIcon, removeNicknameIcon } from "@api/NicknameIcons";
 import { Settings, SettingsStore } from "@api/Settings";
 import { disableStyle, enableStyle } from "@api/Styles";
+import { releaseUserPluginStyles } from "@api/UserPlugins/resources";
 import { traceFunction } from "@debug/Tracer";
 import { Logger } from "@utils/Logger";
 import { onlyOnce } from "@utils/onlyOnce";
@@ -37,7 +38,7 @@ import { FluxEvents } from "@vencord/discord-types";
 import { FluxDispatcher } from "@webpack/common";
 import { patches } from "@webpack/patcher";
 
-import Plugins from "~plugins";
+import Plugins, { PluginMeta } from "~plugins";
 export { Plugins as plugins };
 
 import { addAudioProcessor, removeAudioProcessor } from "./AudioPlayer";
@@ -53,6 +54,186 @@ export const PMLogger = logger;
 /** Whether we have subscribed to flux events of all the enabled plugins when FluxDispatcher was ready */
 let enabledPluginsSubscribedFlux = false;
 const subscribedFluxEventsPlugins = new Set<string>();
+
+const userPluginCleanups = new Map<string, Array<() => unknown>>();
+const failedUserPlugins = new Set<string>();
+const failedPluginStarts = new Set<string>();
+const startingUserPlugins = new Set<string>();
+const userPluginStartAttempted = new Set<string>();
+const pendingUserPluginStarts = new Map<string, Promise<boolean>>();
+let startupStage = StartAt.Init;
+
+function userPluginId(p: Plugin) {
+    const folder = PluginMeta[p.name]?.folderName;
+    return folder?.startsWith("userplugins/") ? folder.slice("userplugins/".length) : undefined;
+}
+
+function userPluginFailed(p: Plugin, error: unknown) {
+    const id = userPluginId(p);
+    const message = error instanceof Error ? error.message : String(error);
+    const firstFailure = !failedUserPlugins.has(p.name);
+    failedUserPlugins.add(p.name);
+    logger.error(`User plugin ${p.name} failed: ${message}`);
+    if (firstFailure && id && !IS_WEB) VencordNative.userPlugins.reportFailure(id, message);
+}
+
+function isThenable(value: unknown): value is PromiseLike<unknown> {
+    return value !== null && (typeof value === "object" || typeof value === "function")
+        && "then" in value && typeof value.then === "function";
+}
+
+export async function waitForUserPluginStartup() {
+    while (pendingUserPluginStarts.size)
+        await Promise.all([...pendingUserPluginStarts.values()]);
+}
+
+function cleanUserPlugin(p: Plugin) {
+    const callbacks = userPluginCleanups.get(p.name) ?? [];
+    userPluginCleanups.delete(p.name);
+    let success = true;
+    if (userPluginStartAttempted.delete(p.name)) {
+        try {
+            const result: unknown = p.stop?.();
+            if (isThenable(result)) void Promise.resolve(result).catch(error => userPluginFailed(p, error));
+        } catch (error) {
+            userPluginFailed(p, error);
+            success = false;
+        }
+    }
+    for (const cleanup of callbacks.toReversed()) {
+        try { cleanup(); } catch (error) {
+            userPluginFailed(p, error);
+            success = false;
+        }
+    }
+    try { releaseUserPluginStyles(p); } catch (error) {
+        userPluginFailed(p, error);
+        success = false;
+    }
+    p.started = false;
+    return success;
+}
+
+function startUserPlugin(p: Plugin) {
+    if (p.started || pendingUserPluginStarts.has(p.name)) return true;
+    if (failedUserPlugins.has(p.name)) return false;
+    const foundId = userPluginId(p);
+    if (!foundId) return false;
+    const id = foundId;
+    if (startingUserPlugins.has(p.name)) {
+        userPluginFailed(p, new Error(`Dependency cycle involving ${p.name}.`));
+        return false;
+    }
+    const {
+        commands, contextMenus, managedStyle, userProfileBadges,
+        onBeforeMessageEdit, onBeforeMessageSend, onMessageClick,
+        chatBarButton, renderMemberListDecorator, renderMessageAccessory, renderMessageDecoration, messagePopoverButton,
+        renderNicknameIcon, headerBarButton, audioProcessor, userAreaButton, renderProfileCollection, chatBarButtonWrapper,
+        renderProfileSection
+    } = p;
+    let cancelled = false;
+    const cleanups: Array<() => unknown> = [() => { cancelled = true; }];
+    const register = (add: () => unknown, remove: () => unknown) => {
+        cleanups.push(remove);
+        add();
+    };
+    userPluginCleanups.set(p.name, cleanups);
+    try {
+        startingUserPlugins.add(p.name);
+        const stageOrder = [StartAt.Init, StartAt.DOMContentLoaded, StartAt.WebpackReady];
+        const pendingDependencies: Promise<boolean>[] = [];
+        for (const name of p.dependencies ?? []) {
+            const dependency = Plugins[name];
+            if (!dependency || !isPluginEnabled(name)) throw new Error(`Required plugin ${name} is unavailable.`);
+            if (failedPluginStarts.has(name) || failedUserPlugins.has(name)) throw new Error(`Required plugin ${name} failed to start.`);
+            if (dependency.started) continue;
+            if (stageOrder.indexOf(dependency.startAt ?? StartAt.WebpackReady) > stageOrder.indexOf(startupStage))
+                throw new Error(`Required plugin ${name} starts after ${p.name}. Use a later startup stage.`);
+            if (!startPlugin(dependency)) throw new Error(`Required plugin ${name} failed to start.`);
+            const pending = pendingUserPluginStarts.get(name);
+            if (pending) pendingDependencies.push(pending);
+        }
+        function activate() {
+            if (cancelled) return false;
+            if (commands?.length && !BUILT_IN) throw new Error("Commands are not ready at this plugin's startup stage.");
+            for (const command of commands ?? []) register(
+                () => registerCommand(command, p.name),
+                () => { if (registeredCommands[command.name] === command) unregisterCommand(command.name); }
+            );
+            if (p.flux) {
+                cleanups.push(() => unsubscribePluginFluxEvents(p, FluxDispatcher));
+                if (enabledPluginsSubscribedFlux) subscribePluginFluxEvents(p, FluxDispatcher);
+            }
+            for (const [navId, handler] of Object.entries(contextMenus ?? {}))
+                register(() => addContextMenuPatch(navId, handler), () => removeContextMenuPatch(navId, handler));
+            if (managedStyle) register(() => enableStyle(managedStyle), () => disableStyle(managedStyle));
+            for (const badge of userProfileBadges ?? []) register(() => addProfileBadge(badge), () => removeProfileBadge(badge));
+            if (onBeforeMessageEdit) register(() => addMessagePreEditListener(onBeforeMessageEdit), () => removeMessagePreEditListener(onBeforeMessageEdit));
+            if (onBeforeMessageSend) register(() => addMessagePreSendListener(onBeforeMessageSend), () => removeMessagePreSendListener(onBeforeMessageSend));
+            if (onMessageClick) register(() => addMessageClickListener(onMessageClick), () => removeMessageClickListener(onMessageClick));
+            if (chatBarButton) register(() => addChatBarButton(p.name, chatBarButton.render, chatBarButton.icon), () => removeChatBarButton(p.name));
+            if (renderMemberListDecorator) register(() => addMemberListDecorator(p.name, renderMemberListDecorator), () => removeMemberListDecorator(p.name));
+            if (renderMessageDecoration) register(() => addMessageDecoration(p.name, renderMessageDecoration), () => removeMessageDecoration(p.name));
+            if (renderMessageAccessory) register(() => addMessageAccessory(p.name, renderMessageAccessory), () => removeMessageAccessory(p.name));
+            if (messagePopoverButton) register(() => addMessagePopoverButton(p.name, messagePopoverButton.render, messagePopoverButton.icon), () => removeMessagePopoverButton(p.name));
+            if (renderNicknameIcon) register(() => addNicknameIcon(p.name, renderNicknameIcon), () => removeNicknameIcon(p.name));
+            if (headerBarButton) {
+                if (headerBarButton.location === "channeltoolbar")
+                    register(() => addChannelToolbarButton(p.name, headerBarButton.render, headerBarButton.priority), () => removeChannelToolbarButton(p.name));
+                else register(() => addHeaderBarButton(p.name, headerBarButton.render, headerBarButton.priority), () => removeHeaderBarButton(p.name));
+            }
+            if (audioProcessor) register(() => addAudioProcessor(p.name, audioProcessor), () => removeAudioProcessor(p.name));
+            if (userAreaButton) register(() => addUserAreaButton(p.name, userAreaButton.render, userAreaButton.priority), () => removeUserAreaButton(p.name));
+            if (renderProfileCollection) register(() => addProfileCollection(p.name, renderProfileCollection.render, renderProfileCollection.priority), () => removeProfileCollection(p.name));
+            if (chatBarButtonWrapper) register(() => addChatBarButtonWrapper(p.name, chatBarButtonWrapper.wrapper, chatBarButtonWrapper.priority), () => removeChatBarButtonWrapper(p.name));
+            if (renderProfileSection) register(() => addProfileSection(p.name, renderProfileSection.render, renderProfileSection.priority), () => removeProfileSection(p.name));
+            p.started = true;
+            if (!IS_WEB) VencordNative.userPlugins.reportFailure(id, "");
+            return true;
+        }
+        function begin() {
+            if (cancelled) return false;
+            for (const name of p.dependencies ?? []) {
+                if (!Plugins[name]?.started || failedPluginStarts.has(name) || failedUserPlugins.has(name))
+                    throw new Error(`Required plugin ${name} failed to start.`);
+            }
+            if (!IS_WEB) VencordNative.userPlugins.markStartup(id);
+            userPluginStartAttempted.add(p.name);
+            const result: unknown = p.start?.();
+            return isThenable(result) ? Promise.resolve(result).then(activate) : activate();
+        }
+        const result = pendingDependencies.length
+            ? Promise.all(pendingDependencies).then(begin)
+            : begin();
+        if (isThenable(result)) {
+            let timer: ReturnType<typeof setTimeout>;
+            const timeout = new Promise<never>((_, reject) => {
+                timer = setTimeout(() => reject(new Error("Plugin startup exceeded the 30 second limit.")), 30_000);
+            });
+            const pending = Promise.race([Promise.resolve(result), timeout]).then(() => !cancelled, error => {
+                cancelled = true;
+                userPluginFailed(p, error);
+                cleanUserPlugin(p);
+                return false;
+            }).finally(() => {
+                clearTimeout(timer);
+                pendingUserPluginStarts.delete(p.name);
+                if (!IS_WEB) VencordNative.userPlugins.markStartup(null);
+            });
+            pendingUserPluginStarts.set(p.name, pending);
+            return true;
+        }
+        return result;
+
+    } catch (error) {
+        userPluginFailed(p, error);
+        cleanUserPlugin(p);
+        return false;
+    } finally {
+        startingUserPlugins.delete(p.name);
+        if (!IS_WEB && !pendingUserPluginStarts.has(p.name)) VencordNative.userPlugins.markStartup(null);
+    }
+}
 
 export function isPluginEnabled(p: string) {
     return (
@@ -131,6 +312,7 @@ export function pluginRequiresRestart(p: Plugin) {
 }
 
 export const startAllPlugins = traceFunction("startAllPlugins", function startAllPlugins(target: StartAt) {
+    startupStage = target;
     logger.info(`Starting plugins (stage ${target})`);
     for (const name in Plugins) {
         if (isPluginEnabled(name) && (!IS_REPORTER || isReporterTestable(Plugins[name], ReporterTestable.Start))) {
@@ -139,7 +321,7 @@ export const startAllPlugins = traceFunction("startAllPlugins", function startAl
             const startAt = p.startAt ?? StartAt.WebpackReady;
             if (startAt !== target) continue;
 
-            startPlugin(Plugins[name]);
+            if (!startPlugin(Plugins[name])) failedPluginStarts.add(name);
         }
     }
 });
@@ -210,12 +392,18 @@ export function subscribeAllPluginsFluxEvents(fluxDispatcher: typeof FluxDispatc
     enabledPluginsSubscribedFlux = true;
 
     for (const name in Plugins) {
-        if (!isPluginEnabled(name)) continue;
-        subscribePluginFluxEvents(Plugins[name], fluxDispatcher);
+        if (!isPluginEnabled(name) || failedUserPlugins.has(name)) continue;
+        const plugin = Plugins[name];
+        if (!userPluginId(plugin)) subscribePluginFluxEvents(plugin, fluxDispatcher);
+        else if (plugin.started) try { subscribePluginFluxEvents(plugin, fluxDispatcher); } catch (error) {
+            userPluginFailed(plugin, error);
+            cleanUserPlugin(plugin);
+        }
     }
 }
 
 export const startPlugin = traceFunction("startPlugin", function startPlugin(p: Plugin) {
+    if (userPluginId(p)) return startUserPlugin(p);
     const {
         name, commands, contextMenus, managedStyle, userProfileBadges,
         onBeforeMessageEdit, onBeforeMessageSend, onMessageClick,
@@ -297,6 +485,7 @@ export const startPlugin = traceFunction("startPlugin", function startPlugin(p: 
 }, p => `startPlugin ${p.name}`);
 
 export const stopPlugin = traceFunction("stopPlugin", function stopPlugin(p: Plugin) {
+    if (userPluginId(p)) return cleanUserPlugin(p);
     const {
         name, commands, contextMenus, managedStyle, userProfileBadges,
         onBeforeMessageEdit, onBeforeMessageSend, onMessageClick,
@@ -440,21 +629,34 @@ export const initPluginManager = onlyOnce(function init() {
     }
 
     for (const p of pluginsValues) {
-        if (p.settings) {
-            p.settings.pluginName = p.name;
+        if (failedUserPlugins.has(p.name)) continue;
+        const ownedPatches = patches.length;
+        const settingsListeners: Array<{ path: string; callback: (value: unknown) => void; }> = [];
+        try {
+            if (p.settings) {
+                p.settings.pluginName = p.name;
 
-            for (const [key, def] of Object.entries(p.settings.def)) {
-                if (def.onChange)
-                    SettingsStore.addChangeListener(`plugins.${p.name}.${key}`, def.onChange);
-            }
-        }
-
-        if (p.patches && isPluginEnabled(p.name)) {
-            if (!IS_REPORTER || isReporterTestable(p, ReporterTestable.Patches)) {
-                for (const patch of p.patches) {
-                    addPatch(patch, p.name);
+                for (const [key, def] of Object.entries(p.settings.def)) {
+                    if (def.onChange) {
+                        const path = `plugins.${p.name}.${key}`;
+                        SettingsStore.addChangeListener(path, def.onChange);
+                        settingsListeners.push({ path, callback: def.onChange });
+                    }
                 }
             }
+
+            if (p.patches && isPluginEnabled(p.name)) {
+                if (!IS_REPORTER || isReporterTestable(p, ReporterTestable.Patches)) {
+                    for (const patch of p.patches) {
+                        addPatch(patch, p.name);
+                    }
+                }
+            }
+        } catch (error) {
+            if (!userPluginId(p)) throw error;
+            userPluginFailed(p, error);
+            patches.splice(ownedPatches);
+            for (const { path, callback } of settingsListeners) SettingsStore.removeChangeListener(path, callback);
         }
     }
 });

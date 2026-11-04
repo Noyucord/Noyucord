@@ -1,9 +1,9 @@
 {
     "manifest_version": 2,
     "minimum_chrome_version": "91",
-    "name": "Equicord Web",
-    "description": "The other cutest Discord mod now in your browser",
-    "author": "Equicord",
+    "name": "Noyucord Web",
+    "description": "A Discord client mod based on Equicord and Vencord.",
+    "author": "Noyucord contributors",
     "homepage_url": "https://github.com/Equicord/Equicord",
     "icons": {
         "128": "icon.png"

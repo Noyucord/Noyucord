@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -1484,6 +1484,16 @@ export const EquicordDevs = Object.freeze({
         id: 1021210809164111932n
     },
 } satisfies Record<string, Dev>);
+
+export const NoyucordDevs = Object.freeze({} satisfies Record<string, Dev>);
+
+export const NoyucordDevsById = /* #__PURE__*/ (() =>
+    Object.freeze(Object.fromEntries(
+        Object.entries(NoyucordDevs as Readonly<Record<string, Dev>>)
+            .filter(([, dev]) => dev.id !== 0n)
+            .map(([, dev]) => [dev.id, dev] as const)
+    ))
+)() as Readonly<Record<string, Dev>>;
 
 // iife so #__PURE__ works correctly
 export const VencordDevsById = /* #__PURE__*/ (() =>

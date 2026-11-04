@@ -10,6 +10,7 @@ import type { PluginIpcMappings } from "@main/ipcPlugins";
 import { UserThemeHeader } from "@main/themes";
 import { UpdateData } from "@main/updater";
 import { IpcEvents } from "@shared/IpcEvents";
+import type { UserPluginNative, UserPluginResult } from "@shared/userPlugins";
 import type { IpcRes } from "@utils/types";
 import { ipcRenderer } from "electron/renderer";
 
@@ -31,7 +32,47 @@ for (const [plugin, methods] of Object.entries(pluginIpcMap)) {
     }
 }
 
+const userPluginNativeMethods = () => ipcRenderer.sendSync("NoyucordUserPlugins:nativeMethods") as Record<string, string[]>;
+const invokeUserPluginNative = (plugin: string, method: string, args: unknown[]) =>
+    ipcRenderer.invoke("NoyucordUserPlugins:invokeNative", plugin, method, args) as Promise<unknown>;
+
+for (const [plugin, methods] of Object.entries(userPluginNativeMethods())) {
+    if (Object.hasOwn(PluginHelpers, plugin)) continue;
+    const map: Record<string, (...args: unknown[]) => Promise<unknown>> = Object.create(null);
+    for (const method of methods) map[method] = (...args) => invokeUserPluginNative(plugin, method, args);
+    PluginHelpers[plugin] = map;
+}
+
+const userPluginCall = <T>(method: string, ...args: unknown[]) =>
+    ipcRenderer.invoke(`NoyucordUserPlugins:${method}`, ...args) as Promise<UserPluginResult<T>>;
+const userPluginSync = <T>(method: string, ...args: unknown[]) =>
+    ipcRenderer.sendSync(`NoyucordUserPlugins:${method}`, ...args) as UserPluginResult<T>;
+
+const userPlugins: UserPluginNative = {
+    inspect: input => userPluginCall("inspect", input),
+    install: input => userPluginCall("install", input),
+    list: () => userPluginCall("list"),
+    setEnabled: (id, enabled) => userPluginCall("setEnabled", id, enabled),
+    remove: (id, removeData) => userPluginCall("remove", id, removeData),
+    checkUpdates: force => userPluginCall("checkUpdates", force),
+    update: (id, nativeTrusted) => userPluginCall("update", id, nativeTrusted),
+    rollback: id => userPluginCall("rollback", id),
+    recover: () => userPluginCall("recover"),
+    openFolder: () => userPluginCall("openFolder"),
+    startup: () => ipcRenderer.sendSync("NoyucordUserPlugins:startup"),
+    nativeMethods: userPluginNativeMethods,
+    invokeNative: invokeUserPluginNative,
+    betterDiscordSnapshot: id => userPluginSync("betterDiscordSnapshot", id),
+    betterDiscordOperation: (id, operation) => userPluginSync("betterDiscordOperation", id, operation),
+    betterDiscordRequest: (id, request) => userPluginCall("betterDiscordRequest", id, request),
+    flushBetterDiscordData: () => userPluginCall("flushBetterDiscordData"),
+    markStartup: id => { ipcRenderer.sendSync("NoyucordUserPlugins:markStartup", id); },
+    reportFailure: (id, message) => { ipcRenderer.sendSync("NoyucordUserPlugins:reportFailure", id, message); },
+    completeStartup: () => { ipcRenderer.sendSync("NoyucordUserPlugins:completeStartup"); }
+};
+
 export default {
+    userPlugins,
     themes: {
         uploadTheme: async (fileName: string, fileData: string): Promise<void> => {
             throw new Error("uploadTheme is WEB only");

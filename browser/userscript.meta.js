@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name            Equicord
+// @name            Noyucord
 // @description     A Discord client mod - Web version
 // @version         %version%
 // @author          Equicord (https://github.com/Equicord)

@@ -95,7 +95,7 @@ function CspErrorCard() {
     const allowableHosts = new Set(allowableUrls.map(url => new URL(url).host));
 
     const allowUrls = async (urls: string[]) => {
-        const result = await VencordNative.csp.requestAddOverride(urls.map(url => new URL(url).origin), ["connect-src", "img-src", "style-src", "font-src"], "Equicord Themes");
+        const result = await VencordNative.csp.requestAddOverride(urls.map(url => new URL(url).origin), ["connect-src", "img-src", "style-src", "font-src"], "Noyucord Themes");
         if (result !== "ok") return;
 
         const hosts = new Set(urls.map(url => new URL(url).host));
@@ -471,7 +471,7 @@ function ThemesTab() {
                 Manage your themes here. Local themes load from your themes folder, online themes from URLs. Themes with a cog wheel icon have customizable settings.
             </Paragraph>
             <Paragraph color="text-subtle" className={Margins.bottom16}>
-                {allThemes.length} theme{allThemes.length !== 1 ? "s" : ""} installed ({localCount} local, {onlineCount} online) · {enabledCount} enabled
+                {allThemes.length} theme{allThemes.length !== 1 ? "s" : ""} installed ({localCount} local, {onlineCount} online) Â· {enabledCount} enabled
             </Paragraph>
 
             <div className={cl("filter-row")}>

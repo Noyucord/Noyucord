@@ -1,0 +1,23 @@
+.vc-notification-timer {
+    width: 100%;
+    transform-origin: left;
+    animation-name: vc-notification-countdown;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+}
+
+@keyframes vc-notification-countdown {
+    from {
+        transform: scaleX(1);
+    }
+
+    to {
+        transform: scaleX(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vc-notification-timer {
+        animation-timing-function: steps(1, end);
+    }
+}

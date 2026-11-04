@@ -10,14 +10,16 @@ import { useSettings } from "@api/Settings";
 import { Heading } from "@components/Heading";
 import { Link } from "@components/Link";
 import { Paragraph } from "@components/Paragraph";
-import { EquicordDevsById, VencordDevsById } from "@utils/constants";
+import { EquicordDevsById, NoyucordDevsById, VencordDevsById } from "@utils/constants";
 import { classNameFactory } from "@utils/css";
 import { fetchUserProfile } from "@utils/discord";
+import { isTruthy } from "@utils/guards";
 import { pluralize } from "@utils/misc";
 import { RenderModalProps, User } from "@vencord/discord-types";
 import { Modal, openModal, showToast, useEffect, useMemo, UserProfileStore, useStateFromStores } from "@webpack/common";
 
-import Plugins, { PluginMeta } from "~plugins";
+import gitRemote from "~git-remote";
+import Plugins from "~plugins";
 
 import { PluginCard } from "./PluginCard";
 import { GithubButton, WebsiteButton } from "./PluginModalButtons";
@@ -43,19 +45,20 @@ function ContributorModal({ user, modalProps }: { user: User; modalProps: Render
 
     const plugins = useMemo(() => {
         const allPlugins = Object.values(Plugins);
-        const pluginsByAuthor = (VencordDevsById[user.id] || EquicordDevsById[user.id])
-            ? allPlugins.filter(p => p.authors.includes(VencordDevsById[user.id] || EquicordDevsById[user.id]))
-            : allPlugins.filter(p =>
-                PluginMeta[p.name]?.userPlugin && p.authors.some(a => a.id.toString() === user.id)
-                || p.authors.some(a => a.name === user.username)
-            );
+        const pluginsByAuthor = allPlugins.filter(p => p.authors.some(author =>
+            author.id.toString() === user.id
+        ));
 
         return pluginsByAuthor
             .filter(p => !p.name.endsWith("API"))
             .sort((a, b) => Number(a.required ?? false) - Number(b.required ?? false));
-    }, [user.id, user.username]);
+    }, [user.id]);
 
-    const ContributedHyperLink = <Link href="https://github.com/Equicord/Equicord">contributed</Link>;
+    const contributorSources = [
+        VencordDevsById[user.id] && { name: "Vencord", url: "https://github.com/Vendicated/Vencord" },
+        EquicordDevsById[user.id] && { name: "Equicord", url: "https://github.com/Equicord/Equicord" },
+        NoyucordDevsById[user.id] && { name: "Noyucord", url: `https://github.com/${gitRemote}` }
+    ].filter(isTruthy);
 
     const hasLinks = website || githubName;
 
@@ -76,12 +79,12 @@ function ContributorModal({ user, modalProps }: { user: User; modalProps: Render
                 plugins.length
                     ? (
                         <Paragraph>
-                            {user.username} has {ContributedHyperLink} to {pluralize(plugins.length, "plugin")}!
+                            {user.username} contributed to {pluralize(plugins.length, "plugin")}.
                         </Paragraph>
                     )
                     : (
                         <Paragraph>
-                            {user.username} has not made any plugins. They likely {ContributedHyperLink} in other ways!
+                            No plugins are listed for {user.username}.
                         </Paragraph>
                     )
             }
@@ -108,6 +111,15 @@ function ContributorModal({ user, modalProps }: { user: User; modalProps: Render
             }
         >
             <div className={cl("root")}>
+                {!!contributorSources.length && (
+                    <Paragraph>
+                        Contributor to {contributorSources.map((source, index) => (
+                            <span key={source.name}>
+                                {index > 0 && ", "}<Link href={source.url}>{source.name}</Link>
+                            </span>
+                        ))}.
+                    </Paragraph>
+                )}
                 {!!plugins.length && (
                     <div className={cl("plugins")}>
                         {plugins.map(p =>

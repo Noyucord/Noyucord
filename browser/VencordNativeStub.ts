@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,6 +26,7 @@ import * as DataStore from "@api/DataStore";
 import type { Settings } from "@api/Settings";
 import { getThemeInfo } from "@main/themes";
 import { debounce } from "@shared/debounce";
+import type { UserPluginNative } from "@shared/userPlugins";
 import { localStorage } from "@utils/localStorage";
 import { getStylusWebStoreUrl } from "@utils/web";
 import { EXTENSION_BASE_URL, metaReady, RENDERER_CSS_URL } from "@utils/web-metadata";
@@ -40,7 +41,33 @@ const setCssDebounced = debounce((css: string) => VencordNative.quickCss.set(css
 const themeStore = DataStore.createStore("VencordThemes", "VencordThemeData");
 
 // probably should make this less cursed at some point
+const unsupportedUserPluginsSync = () => ({ ok: false as const, error: "User plugins require the desktop client." });
+const unsupportedUserPlugins = async () => unsupportedUserPluginsSync();
+const userPlugins: UserPluginNative = {
+    inspect: unsupportedUserPlugins,
+    install: unsupportedUserPlugins,
+    list: unsupportedUserPlugins,
+    setEnabled: unsupportedUserPlugins,
+    remove: unsupportedUserPlugins,
+    checkUpdates: unsupportedUserPlugins,
+    update: unsupportedUserPlugins,
+    rollback: unsupportedUserPlugins,
+    recover: unsupportedUserPlugins,
+    openFolder: unsupportedUserPlugins,
+    startup: () => ({ plugins: [], recovery: false, disabled: true, errors: [] }),
+    markStartup: NOOP,
+    reportFailure: NOOP,
+    completeStartup: NOOP,
+    betterDiscordSnapshot: unsupportedUserPluginsSync,
+    betterDiscordOperation: unsupportedUserPluginsSync,
+    betterDiscordRequest: unsupportedUserPlugins,
+    flushBetterDiscordData: unsupportedUserPlugins,
+    nativeMethods: () => ({}),
+    invokeNative: async () => { throw new Error("Native user plugins require the desktop client."); }
+};
+
 window.VencordNative = {
+    userPlugins,
     themes: {
         uploadTheme: (fileName: string, fileData: string) => DataStore.set(fileName, fileData, themeStore),
         deleteTheme: (fileName: string) => DataStore.del(fileName, themeStore),

@@ -1,5 +1,5 @@
 /*!
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@ import nativeTitleBarStyles from "./nativeTitleBar.css?managed";
 
 export * as Api from "./api";
 export * as Plugins from "./api/PluginManager";
+export * as UserPlugins from "./api/UserPlugins";
 export * as Components from "./components";
 export * as Util from "./utils";
 export * as Updater from "./utils/updater";
@@ -43,6 +44,7 @@ import { NotificationData, showNotification } from "./api/Notifications";
 import { initPluginManager, PMLogger, startAllPlugins } from "./api/PluginManager";
 import { PlainSettings, Settings, SettingsStore } from "./api/Settings";
 import { areLocalSettingsDirty, getCloudSettings, getCloudSyncDirection, markLocalSettingsDirty, putCloudSettings, shouldCloudSync } from "./api/SettingsSync/cloudSync";
+import { finishUserPluginStartup, loadUserPlugins } from "./api/UserPlugins";
 import { relaunch } from "./utils/native";
 import { checkForUpdates, update, UpdateLogger } from "./utils/updater";
 import { onceReady } from "./webpack";
@@ -146,7 +148,7 @@ async function runUpdateCheck() {
                 notifiedForUpdatesThisSession = true;
 
                 showNotice(
-                    "Equicord has been updated!",
+                    "Noyucord has been updated!",
                     "Restart",
                     relaunch
                 );
@@ -158,7 +160,7 @@ async function runUpdateCheck() {
         notifiedForUpdatesThisSession = true;
 
         showNotice(
-            "A new version of Equicord is available!",
+            "A new version of Noyucord is available!",
             "View Update",
             () => openSettingsTabModal(UpdaterTab!)
         );
@@ -170,6 +172,7 @@ async function runUpdateCheck() {
 async function init() {
     await onceReady;
     startAllPlugins(StartAt.WebpackReady);
+    finishUserPluginStartup();
 
     syncSettings();
 
@@ -189,22 +192,27 @@ async function init() {
                 "Webpack has finished initialising, but some patches haven't been applied yet.",
                 "This might be expected since some Modules are lazy loaded, but please verify",
                 "that all plugins are working as intended.",
-                "You are seeing this warning because this is a Development build of Equicord.",
+                "You are seeing this warning because this is a Development build of Noyucord.",
                 "\nThe following patches have not been applied:",
                 "\n\n" + pendingPatches.map(p => `${p.plugin}: ${p.find}`).join("\n")
             );
     }
 }
 
+loadUserPlugins();
 initPluginManager();
 initStyles();
 startAllPlugins(StartAt.Init);
 init();
 
-document.addEventListener("DOMContentLoaded", () => {
+function startDomPlugins() {
     startAllPlugins(StartAt.DOMContentLoaded);
 
     if (IS_DISCORD_DESKTOP && Settings.nativeTitleBar) {
         enableStyle(nativeTitleBarStyles);
     }
-}, { once: true });
+    finishUserPluginStartup("dom");
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", startDomPlugins, { once: true });
+else startDomPlugins();

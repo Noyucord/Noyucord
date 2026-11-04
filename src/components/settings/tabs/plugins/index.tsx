@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2022 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -37,7 +37,7 @@ import { Margins } from "@utils/margins";
 import { classes } from "@utils/misc";
 import { PluginTarget } from "@utils/pluginTargets";
 import { promptToRestart } from "@utils/promptToRestart";
-import { useAwaiter, useCleanupEffect, useIntersection } from "@utils/react";
+import { useAwaiter, useIntersection } from "@utils/react";
 import { PluginTag, PluginTags } from "@utils/types";
 import { Alerts, lodash, Parser, React, SearchableSelect, Select, showToast, TextInput, Tooltip, useCallback, useMemo, useRef, useState } from "@webpack/common";
 import { JSX } from "react";
@@ -102,6 +102,7 @@ const enum SearchStatus {
     ENABLED,
     DISABLED,
     EQUICORD,
+    NOYUCORD,
     VENCORD,
     NEW,
     USER_PLUGINS,
@@ -114,8 +115,8 @@ export const ExcludedReasons: Record<PluginTarget, string> = {
     vesktop: "Vesktop/Equibop apps",
     equibop: "Vesktop/Equibop apps",
     web: "Vesktop/Equibop apps & Discord web",
-    dev: "Developer version of Equicord",
-    browser: "Web Browser version of Equicord"
+    dev: "Developer version of Noyucord",
+    browser: "Web Browser version of Noyucord"
 };
 
 function ExcludedPluginsList({ search }: { search: string; }) {
@@ -148,7 +149,7 @@ export default function PluginSettings() {
     const changeRef = useRef<ChangeList<string>>(null);
     const changes = changeRef.current ??= new ChangeList<string>();
 
-    useCleanupEffect(() => {
+    React.useEffect(() => {
         return () => {
             if (!changes.hasChanges) return;
 
@@ -195,7 +196,7 @@ export default function PluginSettings() {
     )
         .toSorted((a, b) => Number(settings.plugins[b.name]?.isFavorite ?? false) - Number(settings.plugins[a.name]?.isFavorite ?? false));
 
-    const hasUserPlugins = useMemo(() => !IS_STANDALONE && Object.values(PluginMeta).some(m => m.userPlugin), []);
+    const hasUserPlugins = useMemo(() => Object.values(PluginMeta).some(m => m.userPlugin), []);
 
     const [searchValue, setSearchValue] = useState({ value: "", tags: [] as PluginTag[], status: SearchStatus.ALL });
 
@@ -216,10 +217,13 @@ export default function PluginSettings() {
                 if (!isPluginEnabled(plugin.name)) return false;
                 break;
             case SearchStatus.EQUICORD:
-                if (!PluginMeta[plugin.name].folderName.startsWith("src/equicordplugins/")) return false;
+                if (PluginMeta[plugin.name].origin !== "equicord") return false;
                 break;
             case SearchStatus.VENCORD:
-                if (!PluginMeta[plugin.name].folderName.startsWith("src/plugins/")) return false;
+                if (PluginMeta[plugin.name].origin !== "vencord") return false;
+                break;
+            case SearchStatus.NOYUCORD:
+                if (PluginMeta[plugin.name].origin !== "noyucord") return false;
                 break;
             case SearchStatus.NEW:
                 if (!newPluginsSet?.has(plugin.name)) return false;
@@ -278,7 +282,7 @@ export default function PluginSettings() {
 
             if (isRequired) {
                 const tooltipText = p.required || !depMap[p.name]
-                    ? "This plugin is required for Equicord to function."
+                    ? "This plugin is required for Noyucord to function."
                     : <PluginDependencyList deps={depMap[p.name]?.filter(d => settings.plugins[d].enabled)} />;
 
                 requiredPlugins.push(
@@ -420,6 +424,7 @@ export default function PluginSettings() {
                             { label: "Show Favorites", value: SearchStatus.FAVORITES },
                             { label: "Show Enabled", value: SearchStatus.ENABLED },
                             { label: "Show Disabled", value: SearchStatus.DISABLED },
+                            { label: "Show Noyucord", value: SearchStatus.NOYUCORD },
                             { label: "Show Equicord", value: SearchStatus.EQUICORD },
                             { label: "Show Vencord", value: SearchStatus.VENCORD },
                             { label: "Show New", value: SearchStatus.NEW },

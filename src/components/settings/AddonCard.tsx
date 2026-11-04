@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@ interface Props {
     description: ReactNode;
     enabled: boolean;
     setEnabled: (enabled: boolean) => void;
+    toggleLabel?: string;
     disabled?: boolean;
     isNew?: boolean;
     sourceBadge?: ReactNode;
@@ -44,7 +45,7 @@ interface Props {
     author?: ReactNode;
 }
 
-export function AddonCard({ disabled, isNew, sourceBadge, tooltip, name, infoButton, footer, author, enabled, setEnabled, description, onMouseEnter, onMouseLeave }: Props) {
+export function AddonCard({ disabled, isNew, sourceBadge, tooltip, name, infoButton, footer, author, enabled, setEnabled, toggleLabel, description, onMouseEnter, onMouseLeave }: Props) {
     const titleRef = useRef<HTMLDivElement>(null);
     const titleContainerRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +98,7 @@ export function AddonCard({ disabled, isNew, sourceBadge, tooltip, name, infoBut
                 {infoButton}
 
                 <Switch
+                    aria-label={toggleLabel ?? (typeof name === "string" ? name : undefined)}
                     checked={enabled}
                     onChange={setEnabled}
                     disabled={disabled}

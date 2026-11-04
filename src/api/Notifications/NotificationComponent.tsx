@@ -1,5 +1,5 @@
 /*
- * Vencord, a modification for Discord's desktop app
+ * Noyucord, a modification for Discord's desktop app
  * Copyright (c) 2023 Vendicated and contributors
  *
  * This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,8 @@ import "./styles.css";
 import { useSettings } from "@api/Settings";
 import ErrorBoundary from "@components/ErrorBoundary";
 import { classes } from "@utils/misc";
-import { React, useEffect, useRef, useState } from "@webpack/common";
+import { useNotificationTimer } from "@utils/notificationTimer";
+import { React, useState } from "@webpack/common";
 
 import { NotificationData } from "./Notifications";
 
@@ -41,38 +42,7 @@ export default ErrorBoundary.wrap(function NotificationComponent({
     const { timeout, position } = useSettings(["notifications.timeout", "notifications.position"]).notifications;
 
     const [isHover, setIsHover] = useState(false);
-    const [elapsed, setElapsed] = useState(0);
-
-    const start = useRef(Date.now());
-    const pause = useRef<number | null>(null);
-
-    useEffect(() => {
-        if (timeout === 0 || permanent) return;
-
-        if (isHover) {
-            if (pause.current === null) pause.current = Date.now();
-            return;
-        }
-
-        if (pause.current !== null) {
-            const pausedFor = Date.now() - pause.current;
-            start.current += pausedFor;
-            pause.current = null;
-        }
-
-        const intervalId = setInterval(() => {
-            const elapsedNow = Date.now() - start.current;
-            if (elapsedNow >= timeout) {
-                onClose!();
-            } else {
-                setElapsed(elapsedNow);
-            }
-        }, 10);
-
-        return () => clearInterval(intervalId);
-    }, [timeout, isHover, permanent]);
-
-    const timeoutProgress = elapsed / timeout;
+    const progress = useNotificationTimer(timeout, isHover, permanent, onClose);
 
     return (
         <button
@@ -122,8 +92,9 @@ export default ErrorBoundary.wrap(function NotificationComponent({
             {image && <img className="vc-notification-img" src={image} alt="" />}
             {timeout !== 0 && !permanent && (
                 <div
-                    className="vc-notification-progressbar"
-                    style={{ width: `${(1 - timeoutProgress) * 100}%`, backgroundColor: color || "var(--brand-500)" }}
+                    key={progress.key}
+                    className="vc-notification-progressbar vc-notification-timer"
+                    style={{ ...progress.style, backgroundColor: color || "var(--brand-500)" }}
                 />
             )}
         </button>

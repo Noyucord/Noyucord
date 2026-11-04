@@ -1,0 +1,122 @@
+.vc-userplugins-root {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    color: var(--text-default);
+}
+
+.vc-userplugins-root > label,
+.vc-userplugins-import > label {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vc-userplugins-actions,
+.vc-userplugins-choice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.vc-userplugins-choice {
+    justify-content: space-between;
+}
+
+.vc-userplugins-import,
+.vc-userplugins-recovery {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.vc-userplugins-meta {
+    color: var(--text-muted);
+}
+
+.vc-userplugins-details > summary {
+    cursor: pointer;
+    padding-block: 4px;
+}
+
+.vc-userplugins-details > summary:focus-visible {
+    outline: 2px solid var(--border-focus, var(--text-default));
+    outline-offset: 2px;
+}
+
+.vc-userplugins-dependency-list {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.vc-userplugins-dependency-list > li {
+    border-left: 1px solid var(--border-subtle);
+    padding-left: 12px;
+}
+
+.vc-userplugins-dependency-list .vc-userplugins-actions {
+    margin-top: 8px;
+}
+
+.vc-userplugins-grid {
+    margin-top: 0;
+    grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+}
+
+.vc-userplugins-grid .vc-addon-card,
+.vc-userplugins-grid .vc-addon-name-author {
+    min-width: 0;
+}
+
+.vc-userplugins-grid .vc-addon-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-wrap: anywhere;
+}
+
+.vc-userplugins-remove {
+    border-left: 2px solid var(--text-feedback-critical);
+    padding-left: 16px;
+}
+
+.vc-userplugins-candidates {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+@media (width <= 480px) {
+    .vc-userplugins-actions > button {
+        max-width: 100%;
+        white-space: normal;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vc-userplugins-grid .vc-addon-card,
+    .vc-userplugins-root .vc-plugins-info-card {
+        transition: none;
+    }
+
+    .vc-userplugins-grid .vc-addon-card:hover,
+    .vc-userplugins-root .vc-plugins-info-card:hover {
+        transform: none;
+    }
+
+    .vc-userplugins-grid .vc-addon-title:hover {
+        animation: none;
+    }
+}
