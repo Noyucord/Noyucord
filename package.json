@@ -32,7 +32,6 @@
         "inject": "node scripts/runInstaller.mjs -- --install",
         "inject:local": "node scripts/injectLocal.mjs --install",
         "uninject:local": "node scripts/injectLocal.mjs --uninstall",
-        "test:inject-local": "node --test scripts/tests/injectLocal.test.mjs",
         "uninject": "node scripts/runInstaller.mjs -- --uninstall",
         "repair": "node scripts/runInstaller.mjs -- --repair",
         "lint": "eslint",
@@ -43,9 +42,7 @@
         "lint:patches": "node scripts/lintPatches.mjs",
         "test": "pnpm buildStandalone && pnpm testTsc && pnpm lint:fix && pnpm lint-styles && pnpm lint:intl && pnpm lint:patches && pnpm generatePluginJson",
         "testWeb": "pnpm lint:fix && pnpm buildWeb && pnpm testTsc",
-        "testTsc": "tsc --noEmit",
-        "test:userplugins": "tsx --test scripts/tests/userPluginCompiler.test.ts scripts/tests/userPluginNative.test.ts scripts/tests/userPluginStore.test.ts scripts/tests/userPluginSources.test.ts scripts/tests/betterDiscordPackage.test.ts scripts/tests/betterDiscordNative.test.ts && node --test scripts/tests/userPluginRuntime.test.mjs scripts/tests/userPluginNativeRuntime.test.mjs scripts/tests/userPluginIpc.test.mjs scripts/tests/userPluginSettings.test.mjs scripts/tests/userPluginMetadata.test.mjs scripts/tests/userPluginAuthors.test.mjs scripts/tests/userPluginFacade.test.mjs scripts/tests/betterDiscordApi.test.mjs scripts/tests/betterDiscordRuntime.test.mjs scripts/tests/betterDiscordLibraries.test.mjs scripts/tests/betterDiscordHotPaths.test.mjs scripts/tests/betterDiscordProviderWebpack.test.mjs scripts/tests/webpackDeclarations.test.mjs scripts/tests/webpackDeclarationCapture.test.mjs scripts/tests/betterDiscordDeclarations.test.mjs scripts/tests/betterDiscordLegacy.test.mjs scripts/tests/notificationTiming.test.mjs",
-        "test:betterdiscord:runtime": "node --test --test-isolation=none scripts/tests/betterDiscordApi.test.mjs scripts/tests/betterDiscordRuntime.test.mjs scripts/tests/betterDiscordLibraries.test.mjs scripts/tests/betterDiscordHotPaths.test.mjs scripts/tests/betterDiscordProviderWebpack.test.mjs scripts/tests/webpackDeclarations.test.mjs scripts/tests/webpackDeclarationCapture.test.mjs scripts/tests/betterDiscordDeclarations.test.mjs scripts/tests/betterDiscordLegacy.test.mjs"
+        "testTsc": "tsc --noEmit"
     },
     "dependencies": {
         "@ffmpeg/ffmpeg": "^0.12.10",

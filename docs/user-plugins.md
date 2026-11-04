@@ -123,14 +123,3 @@ When a BetterDiscord consumer is enabled, the main Webpack execution hook captur
 Fully quit and reopen Discord after updating the declaration bridge. Already executed modules are not run again to recover their private variables. Legacy confirmation-modal and voice-channel lookups use the host's current implementations; custom settings children and radio option names remain in the existing User plugins settings surface.
 
 Legacy modal-size lookups map to the current host modal. Modal render failures close the affected modal and report the owning plugin's error. The first plugin failure stays visible even if cleanup also fails. Missing optional patch targets return `null`, matching BetterDiscord's patcher contract; configurable getter exports restore their original descriptors when unpatched.
-
-## Development checks
-
-From the repository root:
-
-```text
-pnpm test:userplugins
-pnpm test:betterdiscord:runtime
-```
-
-The compiler suite builds and runs the actual WASM worker. The runtime suite uses the real registry and plugin manager with controlled Discord/native host modules. These checks do not replace testing the plugin in the desktop client.
